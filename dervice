@@ -1,0 +1,181 @@
+#!/bin/bash
+
+app=$(pwd)
+systemd=/etc/systemd/system
+version=1.0
+
+function usage() {
+	echo "Usage: dervice COMMAND [OPTIONS]"
+	echo "       dervice [ -h | --help | -v | --version ]"
+	echo
+	echo "A dockerized service builder using Systemd and Dervicefiles"
+	echo
+	echo "Options:"
+	echo
+	echo "  -h, --help      Print help and usage information"
+	echo "  -v, --version   Print version information"
+	echo
+	echo "Commands:"
+	echo "  build    Build from Dockerfile or docker-compose.yml"
+	echo "  up       Turn on the service (and enable after reboot)"
+	echo "  down     Turn off the service (and disable from reboot)"
+	echo "  restart  Restart the service"
+	echo "  status   Show service status"
+	echo "  upgrade  Pull new docker images (will NOT restart the service for you)"
+	echo 
+	exit 1
+}
+
+function version() {
+	echo "Dervice (Docker Service) $version"
+	echo "Copyright (C) 2016 Matthew Reschke <mreschke.com>"
+	echo "This program may be freely redistributed under the terms of the MIT license"
+	echo
+	echo "A dockerized service builder using Systemd and Dervicefiles"
+	echo
+	exit
+}
+
+if [[ $# -eq 0 ]]; then
+	usage
+fi
+
+
+while [[ $# > 0 ]]; do
+	key="$1"
+	case $key in
+		-h|--help)
+			usage
+			shift
+		;;
+		-v|--version)
+			version
+			shift
+		;;
+		--test)
+			x="$2"
+			shift
+		;;
+	*)
+		cmd=$key
+	;;
+	esac
+	shift
+done
+
+function validateDervice() {
+	if [ ! -e $app/Dervicefile ]; then
+		echo "Not a dervice project?  No Dervicefile found"
+		exit 1
+	fi
+}
+
+function includeDervicefile() {
+	source $app/Dervicefile
+	service=$name.dervice.service
+}
+
+function requireRoot() {
+	if [[ $EUID -ne 0 ]]; then
+		echo "Access denied, you must be root (or sudo)"
+		exit 1
+	fi
+}
+
+function installUnit() {
+	echo "Installing systemd unit file $service"
+	#fixme, md5 files, only daemon-reload if changed
+	echo "$unit" | sudo sh -c "cat > $systemd/$service"
+
+	echo "Enabling systemd unit file for automatic startup on boot"
+	sudo systemctl enable $service
+	sudo systemctl daemon-reload
+}
+
+function uninstallUnit() {
+
+	echo "Disabling container with systemd from startup"
+	sudo systemctl disable $service
+
+	echo "Uninstalling systemd unit file $service"
+	if [ -e $systemd/$service ]; then
+		sudo rm -rf $systemd/$service
+	fi
+
+}
+
+function pull() {
+	echo "Pulling $1"
+	docker pull $1
+	echo
+}
+
+function up() {
+	ps=$(docker ps -af name=$name|wc -l)
+	if [ $ps -eq 2 ]; then
+		echo "Service $name is up!"
+		exit 1
+	fi
+	installUnit
+
+	echo "Starting container  with systemd"
+	sudo systemctl start $service
+}
+
+function down() {
+	echo "Stoping container with systemd"
+	sudo systemctl stop $service
+	uninstallUnit
+}
+
+
+function showStatus() {
+	docker inspect $name; echo
+	docker ps -f name=$name; echo
+	systemctl status $service; echo
+}
+
+function upgradeImages() {
+	echo "Upgrading images"
+	upgrade
+	echo "Images upgraded!  Run dervice restart manually to see image updates"
+	echo
+}
+
+
+validateDervice
+includeDervicefile
+
+if [ $cmd == "build" ]; then
+	echo "Building service container"
+	build
+
+elif [ $cmd == "up" ]; then
+	up
+
+elif [ $cmd == "down" ]; then
+	down
+
+elif [ $cmd == "restart" ]; then
+	down; echo
+	up; echo
+
+elif [ $cmd == "status" ]; then
+	showStatus
+
+elif [ $cmd == "upgrade" ]; then
+	upgradeImages
+
+else
+	echo "$cmd is not a valid dervice command, see --help"
+fi
+
+#x=$(unitFile)
+
+#echo "$x" > $systemd/$service
+#echo "$unit" > $systemd/$service
+
+#echo $x
+
+
+
