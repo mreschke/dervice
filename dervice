@@ -22,12 +22,14 @@ function usage() {
 	echo "  restart  Restart the service"
 	echo "  status   Show service status"
 	echo "  upgrade  Pull new docker images (will NOT restart the service for you)"
+	echo "  shell    Start a bash shell inside the container"
+	echo "  exec     Execute any custom method in the Dervicefile"
 	echo 
 	exit 1
 }
 
 function version() {
-	echo "Dervice (Docker Service) $version"
+	echo "Dervice $version"
 	echo "Copyright (C) 2016 Matthew Reschke <mreschke.com>"
 	echo "This program may be freely redistributed under the terms of the MIT license"
 	echo
@@ -40,7 +42,7 @@ if [[ $# -eq 0 ]]; then
 	usage
 fi
 
-
+commands=()
 while [[ $# > 0 ]]; do
 	key="$1"
 	case $key in
@@ -57,11 +59,14 @@ while [[ $# > 0 ]]; do
 			shift
 		;;
 	*)
-		cmd=$key
+		#cmd="$cmd $key"
+		commands+=($key)
 	;;
 	esac
 	shift
 done
+cmd="${commands[0]}"
+params="${commands[@]:1}"
 
 function validateDervice() {
 	if [ ! -e $app/Dervicefile ]; then
@@ -120,6 +125,9 @@ function up() {
 
 	echo "Starting container  with systemd"
 	sudo systemctl start $service
+
+	echo
+	systemctl status $service; echo
 }
 
 function down() {
@@ -142,9 +150,14 @@ function upgradeImages() {
 	echo
 }
 
+function shell() {
+	docker exec -it $name bash
+}
+
 
 validateDervice
 includeDervicefile
+
 
 if [ $cmd == "build" ]; then
 	echo "Building service container"
@@ -165,6 +178,13 @@ elif [ $cmd == "status" ]; then
 
 elif [ $cmd == "upgrade" ]; then
 	upgradeImages
+
+elif [ $cmd == "shell" ]; then
+	shell
+
+elif [ $cmd == "exec" ]; then
+	method="${params[0]}"
+	$method
 
 else
 	echo "$cmd is not a valid dervice command, see --help"
