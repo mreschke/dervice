@@ -1,0 +1,60 @@
+#!/bin/bash
+
+# Service name (used as systemd and container names)
+name="samba"
+image="mreschke/samba"
+
+# Systemd unit file
+unitX="[Unit]
+Description=Samba container
+Requires=docker.service
+After=docker.service
+
+[Service]
+Restart=always
+ExecStart=/usr/bin/docker start -a samba
+ExecStop=/usr/bin/docker stop -t 10 samba
+
+[Install]
+WantedBy=multi-user.target"
+
+unit="[Unit]
+Description=Samba container
+Requires=docker.service
+After=docker.service
+
+[Service]
+Restart=always
+ExecStart=/usr/bin/docker run --rm --name=$name \
+  -p 139:139 -p 445:445 \
+  --volume /tron/dynastore:/tron/dynastore \
+  $image -s \"server;/tron/dynastore/pub;yes;no;yes;all\"
+ExecStop=/usr/bin/docker stop -t 10 samba
+
+[Install]
+WantedBy=multi-user.target"
+
+
+# Docker build (build image from docker file)
+function build() {
+	docker build -t $image .
+	#docker-compose build
+:;}
+
+function upgrade() {
+	pull debian:jessie
+	pull dperson/samba
+	#docker pull $image
+	#docker-compose pull
+:;}
+
+# Docker run description (docker run or docker-compose ...)
+#function run() {
+#	docker run \
+#		-p 139:139 -p 445:445 \
+#		--volume /tron/dynastore:/tron/dynastore \
+#		--name samba \
+#		--rm mreschke/samba \
+#		-s "server;/tron/dynastore/pub;yes;no;yes;all"
+#:;}
+
